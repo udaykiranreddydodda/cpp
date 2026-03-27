@@ -1,0 +1,349 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tabularx}
+
+% Code listing style
+\lstdefinestyle{codestyle}{
+    backgroundcolor=\color{gray!10},
+    basicstyle=\ttfamily\scriptsize,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!50!black},
+    stringstyle=\color{red!70!black},
+    showstringspaces=false,
+    tabsize=2
+}
+\lstset{style=codestyle}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Smart Inventory Management System: A Serverless Cloud-Based Application for Stock Tracking and Supplier Management on AWS}
+
+\author{\IEEEauthorblockN{Uday Kiran Reddy Dodda}
+\IEEEauthorblockA{Student ID: x00000000 \\
+MSc in Cloud Computing \\
+National College of Ireland, Dublin \\
+x00000000@student.ncirl.ie}}
+
+\maketitle
+
+% ============================================================
+% ABSTRACT
+% ============================================================
+\begin{abstract}
+This paper presents the design, development, and deployment of a serverless cloud-based Smart Inventory Management System built entirely on Amazon Web Services. The application enables businesses to manage product catalogues, track stock movements including intake and dispatch operations, manage supplier relationships, and receive automated low-stock alerts. The system leverages six AWS services programmatically through the boto3 SDK: AWS Lambda for serverless compute, Amazon DynamoDB for NoSQL data persistence, Amazon API Gateway for RESTful endpoint management, Amazon S3 for static website hosting, Amazon SNS for low-stock notification alerts, and AWS IAM for fine-grained access control. A custom object-oriented Python library called inventory-manager-nci was developed and published, providing four primary classes: StockIDGenerator for deterministic identifier creation, InventoryValidator for comprehensive input validation, ReorderManager for stock threshold monitoring and reorder point calculations, and InventoryFormatter for consistent data serialization. The library is validated by 42 automated unit tests. The application features JWT-based authentication, full CRUD operations for products and suppliers, a stock movement tracking system with complete movement history, a dashboard with aggregated statistics, and SNS-triggered alerts when stock levels fall below configured minimum thresholds. The results demonstrate that a fully serverless architecture using Lambda and DynamoDB can deliver a responsive, cost-effective inventory management solution with automatic scaling capabilities.
+\end{abstract}
+
+% ============================================================
+% INTRODUCTION
+% ============================================================
+\section{Introduction}
+
+Inventory management is a fundamental operational concern for businesses of all sizes, yet many small and medium enterprises continue to rely on manual spreadsheet-based systems or expensive on-premise software solutions that require significant upfront investment and ongoing maintenance \cite{inventorymgmt}. As supply chains become increasingly complex and customer expectations for rapid fulfilment continue to rise, the need for accessible, real-time inventory tracking systems has become critical. Cloud computing offers an opportunity to deliver enterprise-grade inventory management capabilities at a fraction of the cost of traditional solutions, with the added benefits of automatic scaling, high availability, and zero infrastructure management overhead.
+
+The motivation for this project stems from the observation that existing cloud-based inventory solutions either target large enterprises with correspondingly complex pricing models or provide overly simplistic tracking that fails to address real operational needs such as stock movement history, supplier management, and automated reorder notifications. There exists a gap in the market for a lightweight yet comprehensive inventory management system that leverages modern serverless cloud architecture to minimise costs while providing essential features for day-to-day stock operations.
+
+The primary objective of this project is to develop a fully serverless Smart Inventory Management System that enables businesses to maintain accurate product catalogues with categorisation, track all stock movements with a complete audit trail, manage supplier relationships and link them to products, receive automated notifications when stock levels fall below configurable thresholds, and access real-time dashboard statistics for operational decision-making. The application employs six AWS services programmatically and includes a custom Python library that encapsulates the domain logic of inventory management following object-oriented design principles \cite{cloudpatterns}.
+
+% ============================================================
+% PROJECT SPECIFICATION AND REQUIREMENTS
+% ============================================================
+\section{Project Specification and Requirements}
+
+\subsection{Functional Requirements}
+
+The application satisfies a comprehensive set of functional requirements designed to address the core needs of inventory management. First, the authentication subsystem implements JWT-based user registration and login, ensuring that all inventory data is protected and that each user can only access their own resources. Passwords are securely hashed before storage in DynamoDB, and JWT tokens are validated on every protected endpoint to prevent unauthorised access.
+
+Second, the product management module provides complete CRUD operations for inventory items, supporting attributes including product name, SKU, category, description, unit price, current stock quantity, minimum stock threshold, and associated supplier. The system automatically generates unique stock identifiers using the StockIDGenerator class from the custom library, ensuring consistent and collision-free product identification across the system.
+
+Third, the stock movement tracking subsystem records all intake (stock received) and dispatch (stock sent out) operations with timestamps, quantities, and reference notes. Each movement automatically updates the product's current stock level, and the complete movement history is maintained for audit and analysis purposes. When a dispatch operation causes the current stock to fall below the configured minimum stock threshold, the system automatically publishes a low-stock alert via Amazon SNS.
+
+Fourth, the supplier management module supports CRUD operations for supplier entities, including name, contact information, email, and product associations. Suppliers can be linked to multiple products, enabling the system to identify which supplier to contact when reorder alerts are triggered. Fifth, the dashboard provides aggregated statistics including total products, total stock value, number of low-stock items, recent movements, and category-wise breakdowns, enabling managers to make informed operational decisions at a glance.
+
+\subsection{Non-Functional Requirements}
+
+The non-functional requirements address scalability, performance, security, and cost efficiency. The serverless architecture inherently provides automatic scaling through AWS Lambda's concurrent execution model, which can handle sudden spikes in API requests without any manual intervention or capacity planning \cite{awslambda}. Security is implemented through multiple layers: JWT authentication for user verification, IAM roles with least-privilege policies for Lambda function execution, API Gateway request validation, and DynamoDB encryption at rest. Cost efficiency is a primary design goal, as the pay-per-request pricing model of both Lambda and DynamoDB means the application incurs zero cost during periods of inactivity, making it ideal for small businesses with variable usage patterns. The system is designed for high availability through the use of DynamoDB's multi-AZ replication and Lambda's automatic deployment across multiple availability zones within the eu-west-1 region.
+
+% ============================================================
+% ARCHITECTURE AND DESIGN
+% ============================================================
+\section{Architecture and Design}
+
+The Smart Inventory Management System follows a serverless architecture pattern comprising a static frontend hosted on Amazon S3, an API layer managed by Amazon API Gateway, serverless compute provided by AWS Lambda, and a NoSQL data layer powered by Amazon DynamoDB. This architecture was selected for its elimination of server management overhead, automatic scaling capabilities, and cost-effective pay-per-use pricing model \cite{serverlesspatterns}.
+
+The frontend is a single-page application hosted as a static website on Amazon S3, accessible via a public S3 website endpoint. The frontend communicates with the backend exclusively through RESTful API calls routed through API Gateway. API Gateway serves as the entry point for all client requests, providing request validation, CORS configuration, and routing to the appropriate Lambda functions. Each API route is mapped to a specific Lambda function handler, following the single-responsibility principle for serverless function design.
+
+The Lambda functions are implemented in Python and share a common codebase deployed as a single Lambda function with multiple handler methods routed by API Gateway path and method configurations. Each handler interacts with DynamoDB through the boto3 SDK and utilises the inventory-manager-nci library for business logic operations including validation, ID generation, and stock threshold calculations. The DynamoDB data model consists of four primary tables: Users for authentication credentials, Products for inventory items, Movements for stock intake and dispatch records, and Suppliers for supplier information. Each table uses a partition key design optimised for the most common access patterns, with Global Secondary Indexes configured for alternative query requirements such as retrieving products by category or movements by date range.
+
+The notification subsystem operates as an event-driven component triggered by stock movement operations. When a dispatch movement causes a product's current stock to fall below its minimum stock threshold, the Lambda function publishes a message to an SNS topic configured with email subscriptions. This asynchronous notification pattern decouples the alert mechanism from the primary transaction flow, ensuring that notification delivery does not impact the response time of stock movement operations.
+
+% ============================================================
+% LIBRARY DESCRIPTION
+% ============================================================
+\section{inventory-manager-nci Library}
+
+The inventory-manager-nci library is a custom Python package developed specifically for this project to encapsulate the domain logic of inventory management operations. The library follows object-oriented design principles with clearly defined classes, comprehensive input validation, and deterministic identifier generation algorithms.
+
+The library provides four primary components. The \texttt{StockIDGenerator} class generates unique, deterministic stock identifiers based on product attributes including category, name, and creation timestamp. The generation algorithm produces human-readable identifiers with a category prefix, a hash-based middle segment, and a timestamp suffix, ensuring both uniqueness and traceability. The \texttt{InventoryValidator} class provides comprehensive validation for all inventory-related data inputs, including product attributes (name length, price range, quantity non-negativity, SKU format), movement validation (quantity bounds, valid movement types), and supplier field validation. The validator raises descriptive exceptions that enable meaningful error messages in the API response layer.
+
+The \texttt{ReorderManager} class implements stock threshold monitoring and reorder point calculations. It provides methods to check whether a product's current stock falls below its minimum threshold, calculate recommended reorder quantities based on configurable safety stock multipliers, and generate reorder reports across multiple products simultaneously. The \texttt{InventoryFormatter} class handles consistent serialization of inventory data, including DynamoDB Decimal-to-float conversion for JSON compatibility, date formatting standardisation, and summary statistics formatting for dashboard responses.
+
+The following code snippet demonstrates how the library is integrated into the product creation Lambda handler:
+
+\begin{lstlisting}[language=Python, caption={Library integration in product creation handler}]
+from inventory_manager_nci import StockIDGenerator
+from inventory_manager_nci import InventoryValidator
+from inventory_manager_nci import InventoryFormatter
+
+validator = InventoryValidator()
+generator = StockIDGenerator()
+formatter = InventoryFormatter()
+
+def create_product(event, context):
+    body = json.loads(event["body"])
+    # Validate all product fields
+    validator.validate_product(body)
+    # Generate unique stock ID
+    stock_id = generator.generate_id(
+        category=body["category"],
+        name=body["name"]
+    )
+    body["stockId"] = stock_id
+    # Convert floats to Decimal for DynamoDB
+    item = formatter.to_dynamodb_item(body)
+    table.put_item(Item=item)
+    return {
+        "statusCode": 201,
+        "body": json.dumps(
+            formatter.from_dynamodb_item(item))
+    }
+\end{lstlisting}
+
+The library is packaged for distribution on the Python Package Index (PyPI) under the name \texttt{inventory-manager-nci} and can be installed via \texttt{pip install inventory-manager-nci}. A comprehensive test suite of 42 unit tests validates all four classes, covering edge cases such as empty string validation, negative quantity rejection, boundary conditions for price ranges, Decimal conversion accuracy, and reorder calculation correctness.
+
+% ============================================================
+% CLOUD SERVICES
+% ============================================================
+\section{Cloud-Based Services}
+
+The application integrates six AWS services, each serving a distinct purpose in the serverless architecture. This section provides a critical analysis and justification for each service selection.
+
+\subsection{AWS Lambda}
+
+AWS Lambda provides the serverless compute layer for all backend business logic \cite{awslambda}. Lambda was selected as the compute service because it eliminates the need to provision, manage, or scale servers, and its pay-per-invocation pricing model is highly cost-effective for applications with variable traffic patterns. Each API request triggers a Lambda function invocation that executes the corresponding handler, interacts with DynamoDB, and returns a response through API Gateway. The Lambda function is configured with 256MB of memory and a 30-second timeout, which is sufficient for all inventory operations including batch stock calculations. Compared to alternatives such as Amazon EC2 or AWS Elastic Beanstalk, Lambda provides superior cost efficiency for this application because inventory management systems typically experience sporadic usage patterns with long periods of inactivity between bursts of activity during stock-taking or order processing. The cold start latency of Lambda, typically 200-500ms for Python runtimes, is acceptable for this use case as inventory operations are not latency-critical in the sub-100ms range.
+
+\subsection{Amazon DynamoDB}
+
+Amazon DynamoDB serves as the primary database for all application data including user accounts, products, stock movements, and supplier records \cite{awsdynamodb}. DynamoDB was chosen over relational database options such as Amazon RDS because the inventory data model is well-suited to a key-value access pattern, where the primary operations are single-item lookups by product ID, scans filtered by category, and range queries on movement timestamps. DynamoDB's single-digit millisecond response times at any scale ensure that the application remains responsive even as the inventory grows to thousands of products. The on-demand capacity mode was selected to align with the pay-per-request pricing philosophy, eliminating the need to predict and provision read/write capacity units. A notable implementation challenge was DynamoDB's use of the Decimal type for numeric values, which is incompatible with Python's standard JSON serialization. The InventoryFormatter class in the custom library addresses this by providing bidirectional conversion between Python floats and DynamoDB Decimals.
+
+\subsection{Amazon API Gateway}
+
+Amazon API Gateway provides the managed API layer that exposes Lambda functions as RESTful HTTP endpoints \cite{awsapigateway}. API Gateway was selected because it provides built-in features including request/response transformation, CORS configuration, request throttling, and usage plans without requiring any custom middleware code. The REST API type was chosen over the HTTP API type because it provides more granular configuration options for request validation and response mapping. API Gateway also provides automatic API documentation generation and supports staging environments for separating development and production deployments. Each endpoint is configured with appropriate HTTP methods and resource paths that follow REST conventions, with path parameters for resource identification and query parameters for filtering operations.
+
+\subsection{Amazon S3}
+
+Amazon S3 serves a dual purpose in this application: hosting the static frontend website and providing potential storage for product images and export files \cite{awss3}. The S3 bucket is configured with static website hosting enabled, a public access policy for the frontend assets, and an index document configuration pointing to the React application's entry point. S3 was selected for frontend hosting because it provides highly durable and available static content serving at minimal cost, without requiring a web server. The frontend is accessible at the S3 website endpoint URL, providing a production-ready hosting solution. Compared to alternatives such as AWS Amplify Hosting or Amazon CloudFront with S3 origin, the direct S3 website hosting approach was chosen for its simplicity and cost-effectiveness for this project's requirements, though a production deployment would benefit from CloudFront's edge caching and HTTPS support.
+
+\subsection{Amazon SNS}
+
+Amazon Simple Notification Service (SNS) provides the publish-subscribe messaging infrastructure for low-stock alert notifications \cite{awssns}. When a stock dispatch operation causes a product's current stock level to fall below its configured minimum stock threshold, the Lambda handler publishes a notification message to a dedicated SNS topic. The topic is configured with email subscriptions that deliver formatted alert messages to inventory managers, including the product name, current stock level, minimum threshold, and recommended reorder quantity calculated by the ReorderManager class. SNS was selected over alternatives such as Amazon SES for direct email sending because SNS supports multiple subscription protocols (email, SMS, HTTP, Lambda) from a single publish action, providing flexibility to add additional notification channels without modifying the application code. The fan-out pattern enabled by SNS ensures that multiple stakeholders can subscribe to low-stock alerts independently.
+
+\subsection{AWS IAM}
+
+AWS Identity and Access Management (IAM) provides the security foundation for the entire application by enforcing least-privilege access policies for all AWS service interactions \cite{awsiam}. The Lambda execution role is configured with precisely scoped permissions that grant access only to the specific DynamoDB tables, SNS topics, and S3 buckets required by the application. This fine-grained access control ensures that a compromised Lambda function cannot access resources beyond its intended scope. IAM policies are defined using JSON policy documents with explicit resource ARNs rather than wildcard permissions, following AWS security best practices. The API Gateway is configured with IAM-based authorization for administrative endpoints, while user-facing endpoints use the custom JWT authentication mechanism implemented in the Lambda handlers.
+
+% ============================================================
+% IMPLEMENTATION
+% ============================================================
+\section{Implementation}
+
+The implementation follows a modular structure with clear separation between the Lambda handlers, DynamoDB data access layer, AWS service integrations, and the custom library. This section documents the implementation of each major component and the key technical decisions made during development.
+
+\subsection{Backend API and CRUD Operations}
+
+All CRUD operations are implemented as Lambda handler functions exposed through API Gateway endpoints following RESTful conventions. The product resource supports POST for creation with automatic stock ID generation, GET for retrieval of individual products and filtered collections, PUT for updates with re-validation, and DELETE for removal with cascading cleanup of associated movement records. The stock movement resource provides endpoints for recording intake and dispatch operations, each of which atomically updates the product's current stock level using DynamoDB's UpdateExpression with atomic counter operations to prevent race conditions in concurrent environments. Table~\ref{tab:endpoints} summarises the primary API endpoints.
+
+\begin{table}[H]
+\centering
+\caption{Primary REST API Endpoints}
+\label{tab:endpoints}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\hline
+POST & /prod/auth/register & User registration \\
+POST & /prod/auth/login & User login (JWT) \\
+\hline
+POST & /prod/products & Create product \\
+GET & /prod/products & List all products \\
+GET & /prod/products/\{id\} & Get product \\
+PUT & /prod/products/\{id\} & Update product \\
+DELETE & /prod/products/\{id\} & Delete product \\
+\hline
+POST & /prod/movements & Record movement \\
+GET & /prod/movements & List movements \\
+GET & /prod/movements/\{id\} & Get movement \\
+\hline
+POST & /prod/suppliers & Create supplier \\
+GET & /prod/suppliers & List suppliers \\
+PUT & /prod/suppliers/\{id\} & Update supplier \\
+DELETE & /prod/suppliers/\{id\} & Delete supplier \\
+\hline
+GET & /prod/dashboard & Dashboard stats \\
+\hline
+\end{tabular}
+\end{table}
+
+The DynamoDB data layer uses the boto3 Table resource interface for all database operations. A key implementation challenge was handling DynamoDB's Decimal type for numeric values. The InventoryFormatter class provides bidirectional conversion methods that transform Python float values to Decimal objects before DynamoDB writes and convert Decimal values back to floats for JSON serialization in API responses. This conversion is applied transparently across all data access operations to ensure numeric consistency throughout the application.
+
+\begin{lstlisting}[language=Python, caption={DynamoDB Decimal conversion in InventoryFormatter}]
+from decimal import Decimal
+import json
+
+class InventoryFormatter:
+    @staticmethod
+    def to_dynamodb_item(data):
+        """Convert floats to Decimal for DynamoDB."""
+        converted = {}
+        for key, value in data.items():
+            if isinstance(value, float):
+                converted[key] = Decimal(str(value))
+            else:
+                converted[key] = value
+        return converted
+
+    @staticmethod
+    def from_dynamodb_item(item):
+        """Convert Decimals to float for JSON."""
+        converted = {}
+        for key, value in item.items():
+            if isinstance(value, Decimal):
+                converted[key] = float(value)
+            else:
+                converted[key] = value
+        return converted
+\end{lstlisting}
+
+\subsection{Stock Movement and Low-Stock Alerts}
+
+The stock movement subsystem is the core operational feature of the application. When a movement is recorded, the Lambda handler first validates the movement data using the InventoryValidator, then retrieves the current product record from DynamoDB, calculates the new stock level based on the movement type (intake adds, dispatch subtracts), updates the product record atomically, and stores the movement record with a timestamp. For dispatch movements, the handler then invokes the ReorderManager to check whether the new stock level has fallen below the minimum threshold. If a low-stock condition is detected, a formatted notification message is published to the SNS topic.
+
+\begin{lstlisting}[language=Python, caption={Stock movement with SNS low-stock alert}]
+from inventory_manager_nci import ReorderManager
+
+reorder_mgr = ReorderManager()
+
+def record_movement(event, context):
+    body = json.loads(event["body"])
+    product = products_table.get_item(
+        Key={"productId": body["productId"]})["Item"]
+
+    if body["type"] == "intake":
+        new_stock = product["currentStock"] + body["qty"]
+    else:
+        new_stock = product["currentStock"] - body["qty"]
+
+    # Update product stock atomically
+    products_table.update_item(
+        Key={"productId": body["productId"]},
+        UpdateExpression="SET currentStock = :s",
+        ExpressionAttributeValues={
+            ":s": Decimal(str(new_stock))})
+
+    # Check low-stock condition
+    if reorder_mgr.is_below_threshold(
+            new_stock, product["minStock"]):
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=f"Low Stock: {product['name']}",
+            Message=reorder_mgr.format_alert(
+                product, new_stock))
+\end{lstlisting}
+
+\subsection{Authentication}
+
+The authentication subsystem implements JWT-based registration and login functionality. User registration accepts a username, email, and password, hashes the password using a secure hashing algorithm, and stores the user record in the Users DynamoDB table. The login endpoint verifies credentials against the stored hash and returns a signed JWT token containing the user identifier and expiration timestamp. All protected endpoints extract and validate the JWT token from the Authorization header before processing the request. The token validation logic is implemented as a shared utility function that is invoked at the beginning of each protected handler, following the decorator pattern for cross-cutting authentication concerns.
+
+\subsection{Frontend Implementation}
+
+The frontend is implemented as a single-page application hosted on Amazon S3, providing a responsive user interface for all inventory management operations. The application features six primary views: a Login/Registration page, a Dashboard with summary statistics and visual indicators for low-stock items, a Products page with tabular display and inline CRUD operations, a Stock Movements page for recording intake and dispatch operations with movement history, a Suppliers page for managing supplier relationships, and an Alerts page displaying recent low-stock notifications. The frontend communicates with the API Gateway endpoints using fetch-based HTTP requests with JWT tokens included in the Authorization header for all authenticated requests. The base API URL is configured to point to the production API Gateway endpoint at \url{https://vjfpwf64w2.execute-api.eu-west-1.amazonaws.com/prod}.
+
+\subsection{Testing}
+
+Testing was conducted comprehensively with 42 automated tests organised into a unified test suite for the inventory-manager-nci library. The test suite covers all four library classes with detailed edge case coverage. The StockIDGenerator tests verify unique ID generation, deterministic output for identical inputs, correct category prefix application, and handling of special characters in product names. The InventoryValidator tests cover valid and invalid inputs for all product fields, movement validation including negative quantity rejection and invalid movement type handling, supplier field validation, and boundary condition testing for price and quantity ranges. The ReorderManager tests validate threshold comparison logic, reorder quantity calculations with configurable safety stock multipliers, batch product analysis, and alert message formatting. The InventoryFormatter tests verify Decimal-to-float conversion accuracy, handling of nested data structures, date format standardisation, and dashboard statistics aggregation. All 42 tests execute without requiring AWS credentials or network access, enabling rapid local execution and integration into the CI/CD pipeline.
+
+% ============================================================
+% CI/CD AND DEPLOYMENT
+% ============================================================
+\section{Continuous Integration, Delivery and Deployment}
+
+The application source code is maintained in a GitHub repository at \url{https://github.com/udaykiranreddydodda/cpp}. A CI/CD pipeline was implemented using GitHub Actions, triggered on every push to the main branch. The pipeline consists of three sequential stages. The first stage installs dependencies and runs the inventory-manager-nci library test suite using pytest, executing 42 unit tests that validate all four library classes including stock ID generation, input validation, reorder calculations, and data formatting. Only when all tests pass does the pipeline proceed to the subsequent stages. The second stage packages the Lambda function code along with all dependencies into a deployment ZIP archive and uploads it to AWS Lambda using the AWS CLI. The third stage builds the frontend production bundle and synchronises the compiled static assets to the Amazon S3 bucket configured for static website hosting, applying the appropriate content types and cache control headers.
+
+All sensitive configuration values including AWS credentials, the JWT secret key, and the SNS topic ARN are stored as encrypted GitHub repository secrets. The deployment targets the eu-west-1 (Ireland) region, where all AWS resources including the DynamoDB tables, Lambda functions, API Gateway, S3 bucket, and SNS topic are provisioned. The Lambda function is configured with environment variables that specify the DynamoDB table names, SNS topic ARN, JWT secret, and the application's operational region.
+
+The deployed frontend application is accessible at: \url{http://smartinventory-frontend-prod-udaykiran.s3-website-eu-west-1.amazonaws.com}. The production API is available at: \url{https://vjfpwf64w2.execute-api.eu-west-1.amazonaws.com/prod}.
+
+% ============================================================
+% CONCLUSIONS
+% ============================================================
+\section{Conclusions}
+
+This project successfully demonstrates the development of a fully serverless cloud-native application that integrates six AWS services to provide a comprehensive inventory management solution for small and medium businesses. The Smart Inventory Management System delivers real-time stock tracking, automated low-stock notifications, supplier management, and dashboard analytics without requiring any server infrastructure management.
+
+Several key findings emerged during the development process. First, the serverless architecture using AWS Lambda proved highly effective for this type of application, where usage patterns are inherently sporadic with periods of intense activity during stock operations interspersed with idle periods. The pay-per-invocation pricing model results in near-zero costs during inactive periods, making it significantly more cost-effective than maintaining an always-on EC2 instance or Elastic Beanstalk environment for a small business application.
+
+Second, Amazon DynamoDB's NoSQL data model required careful consideration of access patterns during the data model design phase. Unlike relational databases where queries can be flexibly constructed after schema design, DynamoDB requires that primary access patterns be identified upfront to design appropriate partition keys and Global Secondary Indexes. The inventory management domain, with its product-centric lookups and time-range queries for movements, proved well-suited to this key-value access pattern. However, the Decimal type handling required by DynamoDB for numeric values introduced a cross-cutting concern that the InventoryFormatter class in the custom library was specifically designed to address.
+
+Third, encapsulating domain logic in the inventory-manager-nci library significantly improved code organisation and testability. The 42 unit tests in the library test suite execute in under two seconds without any AWS dependencies, enabling rapid feedback during development and reliable execution in the CI/CD pipeline. The separation between library logic and Lambda handler code follows the hexagonal architecture principle, where the core business logic remains independent of infrastructure concerns.
+
+Fourth, the integration of Amazon SNS for low-stock alerts demonstrated the power of event-driven patterns in serverless architectures. The publish-subscribe model allows multiple notification channels to be added without modifying the core application logic, and the asynchronous nature of SNS publishing ensures that alert delivery does not impact the critical path of stock movement recording.
+
+The main limitation of the current implementation is the lack of real-time WebSocket-based updates for the dashboard, which would require integration with Amazon API Gateway WebSocket APIs or AWS AppSync. Currently, the dashboard requires manual refresh to reflect recent stock movements. Additionally, the single-Lambda deployment model, while simple, could benefit from per-function deployments for better isolation and independent scaling of different API operations in a high-traffic production environment.
+
+Future enhancements could include barcode scanning integration for streamlined stock-taking operations, predictive reorder recommendations using Amazon SageMaker based on historical movement patterns, multi-warehouse support with location-based inventory tracking, and integration with procurement systems for automated purchase order generation when reorder thresholds are triggered. The serverless architecture established in this project provides a solid foundation for these extensions without requiring significant infrastructure changes.
+
+% ============================================================
+% REFERENCES
+% ============================================================
+\begin{thebibliography}{00}
+
+\bibitem{inventorymgmt} S. Axsater, ``Inventory Control,'' 3rd ed., Springer International Publishing, 2015.
+
+\bibitem{cloudpatterns} C. Richardson, ``Microservices Patterns: With Examples in Java,'' Manning Publications, 2018.
+
+\bibitem{serverlesspatterns} P. Sbarski, ``Serverless Architectures on AWS,'' 2nd ed., Manning Publications, 2022.
+
+\bibitem{awslambda} Amazon Web Services, ``AWS Lambda Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/lambda/
+
+\bibitem{awsdynamodb} Amazon Web Services, ``Amazon DynamoDB Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/dynamodb/
+
+\bibitem{awsapigateway} Amazon Web Services, ``Amazon API Gateway Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/apigateway/
+
+\bibitem{awss3} Amazon Web Services, ``Amazon Simple Storage Service (S3) Documentation,'' 2024. [Online]. Available: https://docs.aws.amazon.com/s3/
+
+\bibitem{awssns} Amazon Web Services, ``Amazon Simple Notification Service Developer Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/sns/
+
+\bibitem{awsiam} Amazon Web Services, ``AWS Identity and Access Management User Guide,'' 2024. [Online]. Available: https://docs.aws.amazon.com/iam/
+
+\bibitem{dynamodbdesign} A. DeBrie, ``The DynamoDB Book,'' 2020. [Online]. Available: https://www.dynamodbbook.com/
+
+\end{thebibliography}
+
+\end{document}

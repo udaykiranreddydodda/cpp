@@ -334,7 +334,7 @@ def handle_delete_product(product_id):
 # ---------------------------------------------------------------------------
 def handle_create_stock_movement(product_id, body):
     """POST /products/{id}/stock — record a stock intake or dispatch."""
-    movement_type = body.get("type")
+    movement_type = body.get("type", "").lower()
     quantity = body.get("quantity")
     if movement_type not in ("intake", "dispatch"):
         return respond(400, {"error": "type must be 'intake' or 'dispatch'"})

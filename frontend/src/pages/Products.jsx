@@ -153,8 +153,8 @@ export default function Products() {
             const status = getStockStatus(product);
             return (
               <Link
-                key={product._id}
-                to={`/products/${product._id}`}
+                key={product._id || product.id}
+                to={`/products/${product._id || product.id}`}
                 className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-shadow block"
               >
                 <div className="flex items-start justify-between mb-3">
@@ -233,15 +233,15 @@ export default function Products() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock</label>
-                  <input type="number" value={form.minStock} onChange={updateForm('minStock')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" min="0" value={form.minStock} onChange={updateForm('minStock')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Max Stock</label>
-                  <input type="number" value={form.maxStock} onChange={updateForm('maxStock')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" min="0" value={form.maxStock} onChange={updateForm('maxStock')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Current Stock</label>
-                  <input type="number" value={form.currentStock} onChange={updateForm('currentStock')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" min="0" value={form.currentStock} onChange={updateForm('currentStock')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>

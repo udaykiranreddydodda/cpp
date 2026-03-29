@@ -132,8 +132,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {data.lowStockProducts.map((product) => (
               <Link
-                key={product._id}
-                to={`/products/${product._id}`}
+                key={product._id || product.id}
+                to={`/products/${product._id || product.id}`}
                 className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4 hover:bg-amber-100 transition-colors"
               >
                 <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />

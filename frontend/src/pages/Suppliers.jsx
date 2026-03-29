@@ -34,7 +34,7 @@ export default function Suppliers() {
   };
 
   const openEdit = (supplier) => {
-    setEditId(supplier._id);
+    setEditId(supplier._id || supplier.id);
     setForm({
       name: supplier.name || '',
       email: supplier.email || '',
@@ -115,9 +115,9 @@ export default function Suppliers() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {suppliers.map((supplier) => (
-            <div key={supplier._id} className="bg-white border border-gray-200 rounded-lg p-5">
+            <div key={supplier._id || supplier.id} className="bg-white border border-gray-200 rounded-lg p-5">
               <div className="flex items-start justify-between mb-3">
-                <h3 className="font-semibold text-gray-900">{supplier.name}</h3>
+                <h3 className="font-semibold text-gray-900 capitalize">{supplier.name}</h3>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => openEdit(supplier)}
@@ -126,7 +126,7 @@ export default function Suppliers() {
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setDeleteConfirm(supplier._id)}
+                    onClick={() => setDeleteConfirm(supplier._id || supplier.id)}
                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -149,17 +149,17 @@ export default function Suppliers() {
                 {supplier.address && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                    {supplier.address}
+                    <span className="capitalize">{supplier.address}</span>
                   </div>
                 )}
               </div>
 
               {/* Delete confirmation */}
-              {deleteConfirm === supplier._id && (
+              {deleteConfirm === (supplier._id || supplier.id) && (
                 <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
                   <span className="text-xs text-red-600 font-medium">Delete?</span>
                   <button
-                    onClick={() => handleDelete(supplier._id)}
+                    onClick={() => handleDelete(supplier._id || supplier.id)}
                     className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600"
                   >
                     Yes
@@ -212,10 +212,12 @@ export default function Suppliers() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                 <input
+                  type="tel"
+                  maxLength="10"
                   value={form.phone}
                   onChange={updateForm('phone')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="+1 234 567 8900"
+                  placeholder="1234567890"
                 />
               </div>
               <div>

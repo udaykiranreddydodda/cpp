@@ -80,7 +80,7 @@ export default function Dashboard() {
     },
     {
       label: 'Total Value',
-      value: `$${(data?.totalValue ?? 0).toLocaleString()}`,
+      value: `$${Math.max(0, data?.totalValue ?? 0).toLocaleString()}`,
       icon: DollarSign,
       color: 'text-green-600',
       bg: 'bg-green-50',

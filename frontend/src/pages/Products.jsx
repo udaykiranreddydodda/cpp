@@ -39,14 +39,30 @@ export default function Products() {
       toast.error('Name and SKU are required');
       return;
     }
+    const priceVal = parseFloat(form.price) || 0;
+    if (priceVal < 0) {
+      toast.error('Price cannot be negative');
+      return;
+    }
+    const minStockVal = parseInt(form.minStock) || 0;
+    const maxStockVal = parseInt(form.maxStock) || 100;
+    const currentStockVal = parseInt(form.currentStock) || 0;
+    if (minStockVal > currentStockVal) {
+      toast.error('Min Stock cannot be greater than Current Stock');
+      return;
+    }
+    if (currentStockVal > maxStockVal) {
+      toast.error('Current Stock cannot be greater than Max Stock');
+      return;
+    }
     setFormLoading(true);
     try {
       const payload = {
         ...form,
-        price: parseFloat(form.price) || 0,
-        minStock: parseInt(form.minStock) || 0,
-        maxStock: parseInt(form.maxStock) || 100,
-        currentStock: parseInt(form.currentStock) || 0,
+        price: priceVal,
+        minStock: minStockVal,
+        maxStock: maxStockVal,
+        currentStock: currentStockVal,
       };
       await api.createProduct(payload);
       toast.success('Product created');
@@ -223,7 +239,7 @@ export default function Products() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
-                  <input type="number" step="0.01" value={form.price} onChange={updateForm('price')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="number" step="0.01" min="0" value={form.price} onChange={updateForm('price')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
               <div>

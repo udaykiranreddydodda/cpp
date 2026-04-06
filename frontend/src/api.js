@@ -50,6 +50,6 @@ export const getDashboard = () => api.get('/dashboard');
 
 // Subscriptions
 export const subscribe = (data) => api.post('/subscribe', data);
-export const getSubscriberCount = () => api.get('/subscribe/count');
+export const getSubscriberCount = () => api.get('/subscribers');
 
 export default api;

@@ -99,16 +99,14 @@ jobs:
           aws iam attach-role-policy --role-name smartinventory-lambda-role \
             --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess || true
           aws iam attach-role-policy --role-name smartinventory-lambda-role \
-            --policy-arn arn:aws:iam::aws:policy/AmazonSQSFullAccess || true
-          aws iam attach-role-policy --role-name smartinventory-lambda-role \
-            --policy-arn arn:aws:iam::aws:policy/CloudWatchFullAccess || true
+            --policy-arn arn:aws:iam::aws:policy/AmazonSNSFullAccess || true
           aws iam attach-role-policy --role-name smartinventory-lambda-role \
             --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole || true
 
-      - name: Create SQS queue
+      - name: Create SNS topic
         run: |
-          SQS_URL=$(aws sqs create-queue --queue-name smartinventory-changes-queue --region eu-west-1 --query 'QueueUrl' --output text)
-          echo "SQS_QUEUE_URL=$SQS_URL" >> $GITHUB_ENV
+          SNS_ARN=$(aws sns create-topic --name smartinventory-notifications --region eu-west-1 --query 'TopicArn' --output text)
+          echo "SNS_TOPIC_ARN=$SNS_ARN" >> $GITHUB_ENV
 
       - name: Wait for IAM propagation
         run: sleep 10
@@ -127,14 +125,14 @@ jobs:
             aws lambda wait function-updated --function-name smartinventory-api --region eu-west-1
             aws lambda update-function-configuration --function-name smartinventory-api \
               --runtime python3.11 --memory-size 256 --timeout 30 \
-              --environment "Variables={DYNAMODB_TABLE=smartinventory-prod,S3_BUCKET=smartinventory-files-prod-udaykiran,SQS_QUEUE_URL=${{ env.SQS_QUEUE_URL }},REGION=eu-west-1,JWT_SECRET=smartinventory-secret-2026}" \
+              --environment "Variables={DYNAMODB_TABLE=smartinventory-prod,S3_BUCKET=smartinventory-files-prod-udaykiran,SNS_TOPIC_ARN=${{ env.SNS_TOPIC_ARN }},REGION=eu-west-1,JWT_SECRET=smartinventory-secret-2026}" \
               --region eu-west-1
           else
             echo "Creating Lambda..."
             aws lambda create-function --function-name smartinventory-api \
               --runtime python3.11 --role "$ROLE_ARN" --handler lambda_function.lambda_handler \
               --zip-file fileb://lambda.zip --memory-size 256 --timeout 30 \
-              --environment "Variables={DYNAMODB_TABLE=smartinventory-prod,S3_BUCKET=smartinventory-files-prod-udaykiran,SQS_QUEUE_URL=${{ env.SQS_QUEUE_URL }},REGION=eu-west-1,JWT_SECRET=smartinventory-secret-2026}" \
+              --environment "Variables={DYNAMODB_TABLE=smartinventory-prod,S3_BUCKET=smartinventory-files-prod-udaykiran,SNS_TOPIC_ARN=${{ env.SNS_TOPIC_ARN }},REGION=eu-west-1,JWT_SECRET=smartinventory-secret-2026}" \
               --region eu-west-1
           fi
 

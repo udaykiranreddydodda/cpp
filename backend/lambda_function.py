@@ -21,14 +21,15 @@ from boto3.dynamodb.conditions import Key, Attr
 # ---------------------------------------------------------------------------
 TABLE_NAME = os.environ.get("DYNAMODB_TABLE", "smartinventory-prod")
 S3_BUCKET = os.environ.get("S3_BUCKET", "smartinventory-files-prod-udaykiran")
-SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN", "")
+SQS_QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
 REGION = os.environ.get("REGION", "eu-west-1")
 JWT_SECRET = os.environ.get("JWT_SECRET", "smartinventory-secret-2026")
 
 # AWS clients
 dynamodb = boto3.resource("dynamodb", region_name=REGION)
 table = dynamodb.Table(TABLE_NAME)
-sns_client = boto3.client("sns", region_name=REGION)
+sqs_client = boto3.client("sqs", region_name=REGION)
+cloudwatch_client = boto3.client("cloudwatch", region_name=REGION)
 
 # ---------------------------------------------------------------------------
 # Helpers — CORS
@@ -135,6 +136,56 @@ def hash_password(password: str) -> tuple:
 def verify_password(password: str, hashed: str, salt: str) -> bool:
     check = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100000).hex()
     return hmac.compare_digest(check, hashed)
+
+
+# ---------------------------------------------------------------------------
+# Helpers — SQS + CloudWatch
+# ---------------------------------------------------------------------------
+def send_sqs_message(action, entity_type, details):
+    """Send a message to SQS queue about a CRUD operation (non-critical)."""
+    if not SQS_QUEUE_URL:
+        return
+    try:
+        sqs_client.send_message(
+            QueueUrl=SQS_QUEUE_URL,
+            MessageBody=json.dumps({
+                "action": action,
+                "entityType": entity_type,
+                "details": details,
+                "timestamp": str(int(time.time())),
+            }, default=str),
+        )
+    except Exception:
+        pass  # Non-critical — don't fail the request
+
+
+def push_cloudwatch_metrics():
+    """Push custom inventory metrics to CloudWatch (non-critical)."""
+    try:
+        result = table.scan(FilterExpression=Attr("entityType").eq("product"))
+        products = result.get("Items", [])
+        total_products = len(products)
+        low_stock_count = sum(
+            1 for p in products
+            if float(p.get("currentStock", 0)) < float(p.get("minStock", 0))
+        )
+        cloudwatch_client.put_metric_data(
+            Namespace="SmartInventory",
+            MetricData=[
+                {
+                    "MetricName": "TotalProducts",
+                    "Value": total_products,
+                    "Unit": "Count",
+                },
+                {
+                    "MetricName": "LowStockItems",
+                    "Value": low_stock_count,
+                    "Unit": "Count",
+                },
+            ],
+        )
+    except Exception:
+        pass  # Non-critical — don't fail the request
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +304,8 @@ def handle_create_product(body):
     except Exception as e:
         return respond(500, {"error": f"Could not create product: {str(e)}"})
 
+    send_sqs_message("CREATE", "product", {"id": product_id, "name": body.get("name"), "sku": body.get("sku")})
+    push_cloudwatch_metrics()
     return respond(201, {"message": "Product created", "product": item})
 
 
@@ -312,6 +365,8 @@ def handle_update_product(product_id, body):
     except Exception as e:
         return respond(500, {"error": f"Could not update product: {str(e)}"})
 
+    send_sqs_message("UPDATE", "product", {"id": product_id, "fields": list(body.keys())})
+    push_cloudwatch_metrics()
     return respond(200, {"message": "Product updated"})
 
 
@@ -326,6 +381,8 @@ def handle_delete_product(product_id):
     except Exception as e:
         return respond(500, {"error": f"Could not delete product: {str(e)}"})
 
+    send_sqs_message("DELETE", "product", {"id": product_id})
+    push_cloudwatch_metrics()
     return respond(200, {"message": "Product deleted"})
 
 
@@ -395,21 +452,15 @@ def handle_create_stock_movement(product_id, body):
     except Exception as e:
         return respond(500, {"error": f"Could not record movement: {str(e)}"})
 
-    # Check low-stock alert
-    min_stock = int(product.get("minStock", 0))
-    if new_stock < min_stock and SNS_TOPIC_ARN:
-        try:
-            sns_client.publish(
-                TopicArn=SNS_TOPIC_ARN,
-                Subject="Low Stock Alert — Smart Inventory",
-                Message=(
-                    f"Product '{product.get('name')}' (SKU: {product.get('sku')}) "
-                    f"is below minimum stock level.\n"
-                    f"Current stock: {new_stock}, Minimum: {min_stock}"
-                ),
-            )
-        except Exception:
-            pass  # Non-critical — don't fail the request
+    # Send SQS message for stock movement and push CloudWatch metrics
+    send_sqs_message("STOCK_MOVEMENT", "product", {
+        "id": product_id,
+        "name": product.get("name"),
+        "type": movement_type,
+        "quantity": quantity,
+        "newStock": new_stock,
+    })
+    push_cloudwatch_metrics()
 
     return respond(201, {"message": "Stock movement recorded", "movement": movement})
 
@@ -566,40 +617,22 @@ def handle_dashboard():
 
 
 # ---------------------------------------------------------------------------
-# Route handlers — Notifications (public)
+# Route handlers — Queue Status (public)
 # ---------------------------------------------------------------------------
-def handle_subscribe(body):
-    """POST /subscribe — subscribe an email to the SNS topic."""
-    email = body.get("email")
-    if not email:
-        return respond(400, {"error": "email is required"})
-
-    if not SNS_TOPIC_ARN:
-        return respond(500, {"error": "SNS topic not configured"})
+def handle_queue_status():
+    """GET /queue-status — return SQS queue attributes."""
+    if not SQS_QUEUE_URL:
+        return respond(200, {"messages": 0, "configured": False})
 
     try:
-        sns_client.subscribe(
-            TopicArn=SNS_TOPIC_ARN,
-            Protocol="email",
-            Endpoint=email,
+        attrs = sqs_client.get_queue_attributes(
+            QueueUrl=SQS_QUEUE_URL,
+            AttributeNames=["ApproximateNumberOfMessages"],
         )
+        count = int(attrs["Attributes"].get("ApproximateNumberOfMessages", 0))
+        return respond(200, {"messages": count, "configured": True})
     except Exception as e:
-        return respond(500, {"error": f"Could not subscribe: {str(e)}"})
-
-    return respond(200, {"message": f"Confirmation email sent to {email}"})
-
-
-def handle_get_subscribers():
-    """GET /subscribers — return subscriber count."""
-    if not SNS_TOPIC_ARN:
-        return respond(200, {"count": 0})
-
-    try:
-        attrs = sns_client.get_topic_attributes(TopicArn=SNS_TOPIC_ARN)
-        count = int(attrs["Attributes"].get("SubscriptionsConfirmed", 0))
-        return respond(200, {"count": count})
-    except Exception as e:
-        return respond(500, {"error": f"Could not get subscribers: {str(e)}"})
+        return respond(500, {"error": f"Could not get queue status: {str(e)}"})
 
 
 # ---------------------------------------------------------------------------
@@ -626,11 +659,8 @@ def lambda_handler(event, context):
     # -----------------------------------------------------------------------
     # Public routes (NO auth required) — must be checked BEFORE auth
     # -----------------------------------------------------------------------
-    if path == "/subscribe" and http_method == "POST":
-        return handle_subscribe(body)
-
-    if path == "/subscribers" and http_method == "GET":
-        return handle_get_subscribers()
+    if path == "/queue-status" and http_method == "GET":
+        return handle_queue_status()
 
     # -----------------------------------------------------------------------
     # Auth routes (no token needed)

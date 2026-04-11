@@ -72,7 +72,7 @@ export default function Dashboard() {
 
   const stats = [
     {
-      label: 'Total Products',
+      label: 'Total',
       value: data?.totalProducts ?? 0,
       icon: Package,
       color: 'text-blue-600',

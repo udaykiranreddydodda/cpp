@@ -603,6 +603,125 @@ def handle_get_subscribers():
 
 
 # ---------------------------------------------------------------------------
+# Route handler — Seed demo data (public)
+# ---------------------------------------------------------------------------
+def handle_seed():
+    """POST /seed — populate demo user, suppliers, products, and stock movements."""
+    now = str(int(time.time()))
+
+    # --- Check if demo user already exists ---
+    demo_email = "demo@smartinventory.com"
+    try:
+        existing = table.scan(
+            FilterExpression=Attr("entityType").eq("user") & Attr("email").eq(demo_email)
+        )
+        if existing.get("Items"):
+            return respond(200, {"message": "Demo data already exists. Login with demo@smartinventory.com / Demo1234!"})
+    except Exception:
+        pass
+
+    # --- Create demo user ---
+    hashed, salt = hash_password("Demo1234!")
+    demo_user_id = str(uuid.uuid4())
+    table.put_item(Item=convert_to_decimal({
+        "id": demo_user_id, "entityType": "user",
+        "username": "Demo User", "email": demo_email,
+        "password": hashed, "salt": salt, "createdAt": now,
+    }))
+
+    # --- Create suppliers ---
+    suppliers = [
+        {"name": "TechWorld Distributors", "email": "sales@techworld.com", "phone": "+353 1 234 5678", "address": "12 Silicon Quay, Dublin 2, Ireland"},
+        {"name": "Global Office Supplies", "email": "orders@globaloffice.ie", "phone": "+353 1 987 6543", "address": "Unit 5, Parkwest Business Park, Dublin 12"},
+        {"name": "FreshFoods Wholesale", "email": "supply@freshfoods.ie", "phone": "+353 1 555 0199", "address": "45 Market St, Cork, Ireland"},
+        {"name": "HomeStyle Furniture Co.", "email": "info@homestyle.ie", "phone": "+353 61 456 789", "address": "8 Shannon Industrial Estate, Limerick"},
+        {"name": "BuildRight Tools Ltd.", "email": "trade@buildright.ie", "phone": "+353 91 321 654", "address": "Galway Retail Park, Galway"},
+    ]
+    supplier_ids = []
+    for s in suppliers:
+        sid = str(uuid.uuid4())
+        supplier_ids.append(sid)
+        table.put_item(Item=convert_to_decimal({
+            "id": sid, "entityType": "supplier",
+            "name": s["name"], "email": s["email"],
+            "phone": s["phone"], "address": s["address"],
+            "createdAt": now, "updatedAt": now,
+        }))
+
+    # --- Create products ---
+    products = [
+        {"name": "Wireless Bluetooth Mouse", "sku": "ELE-WBM-001", "category": "electronics", "price": 24.99, "currentStock": 85, "minStock": 20, "maxStock": 200, "supplier": "TechWorld Distributors", "description": "Ergonomic wireless mouse with USB receiver"},
+        {"name": "USB-C Hub 7-in-1", "sku": "ELE-HUB-002", "category": "electronics", "price": 49.99, "currentStock": 42, "minStock": 15, "maxStock": 100, "supplier": "TechWorld Distributors", "description": "Multi-port adapter with HDMI, USB-A, SD card slots"},
+        {"name": "Mechanical Keyboard", "sku": "ELE-MKB-003", "category": "electronics", "price": 89.99, "currentStock": 12, "minStock": 15, "maxStock": 80, "supplier": "TechWorld Distributors", "description": "RGB backlit mechanical keyboard with brown switches"},
+        {"name": "27-inch Monitor Stand", "sku": "FUR-MST-001", "category": "furniture", "price": 34.99, "currentStock": 58, "minStock": 10, "maxStock": 120, "supplier": "HomeStyle Furniture Co.", "description": "Adjustable monitor riser with storage drawer"},
+        {"name": "Ergonomic Office Chair", "sku": "FUR-EOC-002", "category": "furniture", "price": 249.99, "currentStock": 7, "minStock": 10, "maxStock": 50, "supplier": "HomeStyle Furniture Co.", "description": "Mesh back office chair with lumbar support"},
+        {"name": "A4 Copy Paper (5 Reams)", "sku": "OFF-CPR-001", "category": "office", "price": 22.50, "currentStock": 150, "minStock": 50, "maxStock": 500, "supplier": "Global Office Supplies", "description": "80gsm white multipurpose paper, 500 sheets per ream"},
+        {"name": "Whiteboard Markers (12 pk)", "sku": "OFF-WBM-002", "category": "office", "price": 8.99, "currentStock": 95, "minStock": 30, "maxStock": 200, "supplier": "Global Office Supplies", "description": "Assorted colours dry erase markers"},
+        {"name": "Cordless Power Drill", "sku": "TLS-CPD-001", "category": "tools", "price": 79.99, "currentStock": 23, "minStock": 10, "maxStock": 60, "supplier": "BuildRight Tools Ltd.", "description": "18V lithium-ion drill with 2 batteries"},
+        {"name": "Safety Goggles (10 pk)", "sku": "TLS-SGG-002", "category": "tools", "price": 18.50, "currentStock": 5, "minStock": 15, "maxStock": 100, "supplier": "BuildRight Tools Ltd.", "description": "Anti-fog impact-resistant safety eyewear"},
+        {"name": "Organic Green Tea (50 bags)", "sku": "FOD-OGT-001", "category": "food", "price": 6.99, "currentStock": 200, "minStock": 40, "maxStock": 300, "supplier": "FreshFoods Wholesale", "description": "Certified organic green tea sachets"},
+        {"name": "Instant Coffee Jar 200g", "sku": "FOD-ICJ-002", "category": "food", "price": 5.49, "currentStock": 110, "minStock": 25, "maxStock": 250, "supplier": "FreshFoods Wholesale", "description": "Premium freeze-dried instant coffee"},
+        {"name": "Cotton Polo Shirt (L)", "sku": "CLO-CPS-001", "category": "clothing", "price": 19.99, "currentStock": 65, "minStock": 20, "maxStock": 150, "supplier": "Global Office Supplies", "description": "Company branded navy cotton polo"},
+        {"name": "Hi-Vis Safety Vest", "sku": "CLO-HVS-002", "category": "clothing", "price": 12.50, "currentStock": 3, "minStock": 20, "maxStock": 100, "supplier": "BuildRight Tools Ltd.", "description": "EN ISO 20471 Class 2 fluorescent yellow vest"},
+        {"name": "Standing Desk Converter", "sku": "FUR-SDC-003", "category": "furniture", "price": 179.99, "currentStock": 18, "minStock": 5, "maxStock": 40, "supplier": "HomeStyle Furniture Co.", "description": "Height adjustable sit-stand desktop workstation"},
+        {"name": "Label Printer", "sku": "OFF-LBP-003", "category": "office", "price": 64.99, "currentStock": 14, "minStock": 5, "maxStock": 30, "supplier": "TechWorld Distributors", "description": "Thermal label printer for shipping and barcodes"},
+    ]
+    product_ids = []
+    for p in products:
+        pid = str(uuid.uuid4())
+        product_ids.append(pid)
+        table.put_item(Item=convert_to_decimal({
+            "id": pid, "entityType": "product",
+            "name": p["name"], "sku": p["sku"], "category": p["category"],
+            "description": p["description"], "price": p["price"],
+            "minStock": p["minStock"], "maxStock": p["maxStock"],
+            "currentStock": p["currentStock"], "supplier": p["supplier"],
+            "createdAt": now, "updatedAt": now,
+        }))
+
+    # --- Create stock movements (realistic history) ---
+    movements = [
+        {"idx": 0, "type": "intake", "qty": 100, "prev": 0, "new": 100, "ref": "PO-2026-001", "notes": "Initial stock from TechWorld"},
+        {"idx": 0, "type": "dispatch", "qty": 15, "prev": 100, "new": 85, "ref": "SO-2026-044", "notes": "Shipped to warehouse B"},
+        {"idx": 1, "type": "intake", "qty": 50, "prev": 0, "new": 50, "ref": "PO-2026-003", "notes": "New shipment received"},
+        {"idx": 1, "type": "dispatch", "qty": 8, "prev": 50, "new": 42, "ref": "SO-2026-051", "notes": "Office setup order"},
+        {"idx": 2, "type": "intake", "qty": 30, "prev": 0, "new": 30, "ref": "PO-2026-005", "notes": "Keyboard restock"},
+        {"idx": 2, "type": "dispatch", "qty": 18, "prev": 30, "new": 12, "ref": "SO-2026-062", "notes": "Bulk order - IT dept"},
+        {"idx": 4, "type": "intake", "qty": 20, "prev": 0, "new": 20, "ref": "PO-2026-010", "notes": "Chair delivery"},
+        {"idx": 4, "type": "dispatch", "qty": 13, "prev": 20, "new": 7, "ref": "SO-2026-071", "notes": "New hires setup"},
+        {"idx": 5, "type": "intake", "qty": 200, "prev": 0, "new": 200, "ref": "PO-2026-012", "notes": "Monthly paper order"},
+        {"idx": 5, "type": "dispatch", "qty": 50, "prev": 200, "new": 150, "ref": "SO-2026-078", "notes": "Floor 3 restock"},
+        {"idx": 8, "type": "intake", "qty": 25, "prev": 0, "new": 25, "ref": "PO-2026-018", "notes": "Safety gear order"},
+        {"idx": 8, "type": "dispatch", "qty": 20, "prev": 25, "new": 5, "ref": "SO-2026-085", "notes": "Site safety kits"},
+        {"idx": 12, "type": "intake", "qty": 15, "prev": 0, "new": 15, "ref": "PO-2026-022", "notes": "PPE restock"},
+        {"idx": 12, "type": "dispatch", "qty": 12, "prev": 15, "new": 3, "ref": "SO-2026-090", "notes": "Construction site delivery"},
+    ]
+    base_ts = int(now) - 86400 * 14  # 14 days ago start
+    for i, m in enumerate(movements):
+        mid = str(uuid.uuid4())
+        table.put_item(Item=convert_to_decimal({
+            "id": mid, "entityType": "stockMovement",
+            "productId": product_ids[m["idx"]],
+            "productName": products[m["idx"]]["name"],
+            "type": m["type"], "quantity": m["qty"],
+            "previousStock": m["prev"], "newStock": m["new"],
+            "reference": m["ref"], "notes": m["notes"],
+            "createdAt": str(base_ts + i * 3600 * 8),
+        }))
+
+    return respond(201, {
+        "message": "Demo data seeded successfully",
+        "summary": {
+            "user": demo_email,
+            "password": "Demo1234!",
+            "suppliers": len(suppliers),
+            "products": len(products),
+            "stockMovements": len(movements),
+        }
+    })
+
+
+# ---------------------------------------------------------------------------
 # Main Lambda handler
 # ---------------------------------------------------------------------------
 def lambda_handler(event, context):
@@ -640,6 +759,9 @@ def lambda_handler(event, context):
 
     if path == "/auth/login" and http_method == "POST":
         return handle_login(body)
+
+    if path == "/seed" and http_method == "POST":
+        return handle_seed()
 
     # -----------------------------------------------------------------------
     # Protected routes — verify token

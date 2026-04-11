@@ -5,13 +5,29 @@ import { useAuth } from '../auth';
 import * as api from '../api';
 import toast from 'react-hot-toast';
 
+const DEMO_CREDS = { email: 'demo@smartinventory.com', password: 'Demo1234!' };
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const fillDemo = async () => {
+    setSeeding(true);
+    try {
+      await api.default.post('/seed');
+    } catch {
+      // seed may already exist — that's fine
+    }
+    setEmail(DEMO_CREDS.email);
+    setPassword(DEMO_CREDS.password);
+    setSeeding(false);
+    toast.success('Demo credentials filled — click Sign In');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -77,6 +93,18 @@ export default function Login() {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+          </div>
+
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-700 font-medium mb-2">Quick Demo Access</p>
+            <button
+              type="button"
+              onClick={fillDemo}
+              disabled={seeding}
+              className="w-full py-2 bg-white border border-blue-300 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              {seeding ? 'Setting up demo...' : 'Use Demo Account'}
+            </button>
           </div>
 
           <button

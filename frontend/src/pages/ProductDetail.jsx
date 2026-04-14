@@ -41,7 +41,7 @@ export default function ProductDetail() {
       setEditForm({
         name: prod.name || '',
         sku: prod.sku || '',
-        category: prod.category || 'Other',
+        category: prod.category || 'Others',
         price: prod.price || 0,
         description: prod.description || '',
         minStock: prod.minStock || 0,

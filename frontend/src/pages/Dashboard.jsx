@@ -69,10 +69,9 @@ export default function Dashboard() {
       </div>
     );
   }
-
   const stats = [
     {
-      label: 'Total Products',
+      label: 'Total no of Products',
       value: data?.totalProducts ?? 0,
       icon: Package,
       color: 'text-blue-600',

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 const CATEGORIES = ['All', 'Electronics', 'Clothing', 'Food', 'Furniture', 'Tools', 'Office', 'Other'];
 
-export default function Products() {
+export default function TotalProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
